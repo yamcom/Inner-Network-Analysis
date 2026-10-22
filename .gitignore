@@ -1,0 +1,9 @@
+# 2026-10-22：監控輸出不進版控（WAL/SHM 複本含個資）
+dhcp_events.csv
+
+# 2026-10-22：session 金鑰等執行期機密（不進版控）
+instance/
+
+# 本機虛擬環境
+.venv/
+__pycache__/

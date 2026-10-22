@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>內網 MAC 位址對應電腦名稱清冊</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .sortable { cursor: pointer; user-select: none; }
+        .sortable:hover { background-color: #f1f5f9; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 p-6">
+    <div class="max-w-6xl mx-auto">
+        <!-- 頂部資訊列 -->
+        <header class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 mb-6">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900">內網 MAC 位址與電腦名稱對照清冊</h1>
+                    <p class="text-sm text-slate-500 mt-1">彙整 DHCP Discover / Request / Inform 封包中解析出的實體主機對照清冊</p>
+                </div>
+                <button onclick="window.print()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-sm transition">
+                    🖨️ 列印 / 匯出 PDF
+                </button>
+            </div>
+            <div class="mt-4 pt-4 border-t flex flex-wrap gap-6 text-sm text-slate-600">
+                <div><span class="font-bold text-slate-700">分析產出時間：</span><span class="text-blue-600 font-mono">{{ analysis_time }}</span></div>
+                <div><span class="font-bold text-slate-700">來源檔案：</span><span class="font-mono text-slate-800">{{ source_file }}</span></div>
+                <div><span class="font-bold text-slate-700">已辨識裝置總數：</span><span class="font-bold text-emerald-600">{{ device_mappings|length }} 台</span></div>
+            </div>
+        </header>
+
+        <!-- 即時搜尋與篩選 -->
+        <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 mb-4 flex justify-between items-center">
+            <div class="w-72">
+                <input type="text" id="searchInput" onkeyup="filterDevices()" placeholder="🔍 搜尋電腦名稱、MAC 或 IP..." class="w-full border rounded px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="text-xs text-slate-400">
+                點擊表格標頭欄位可進行升冪 / 降冪排序
+            </div>
+        </div>
+
+        <!-- 裝置列表表格 -->
+        <div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+            <table class="w-full text-left text-sm" id="deviceTable">
+                <thead class="bg-slate-50 text-slate-600 border-b">
+                    <tr>
+                        <th class="p-3 sortable" onclick="sortDevices('hostname')">電腦名稱 (Host Name) <span id="icon_hostname">⇅</span></th>
+                        <th class="p-3 sortable" onclick="sortDevices('mac')">網路卡 MAC 位址 <span id="icon_mac">⇅</span></th>
+                        <th class="p-3 sortable" onclick="sortDevices('ip')">關聯 / 分配 IP <span id="icon_ip">⇅</span></th>
+                        <th class="p-3 sortable" onclick="sortDevices('last_seen')">最後活動時間 <span id="icon_last_seen">⇅</span></th>
+                    </tr>
+                </thead>
+                <tbody id="deviceTableBody" class="divide-y divide-slate-100">
+                    {% for dev in device_mappings %}
+                    <tr class="hover:bg-slate-50 transition device-row">
+                        <td class="p-3 font-bold text-blue-700 dev-host">{{ dev.hostname }}</td>
+                        <td class="p-3 font-mono text-slate-800 dev-mac">{{ dev.mac }}</td>
+                        <td class="p-3 font-mono text-slate-600 dev-ip">{{ dev.ip if dev.ip else '-' }}</td>
+                        <td class="p-3 font-mono text-xs text-slate-500 dev-time">{{ dev.last_seen }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="p-6 text-center text-slate-400">尚未有分析資料，請先在主頁執行封包或 CSV 分析</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let deviceSortState = { column: 'hostname', ascending: true };
+
+        function filterDevices() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const rows = document.querySelectorAll('.device-row');
+            rows.forEach(row => {
+                const host = row.querySelector('.dev-host').innerText.toLowerCase();
+                const mac = row.querySelector('.dev-mac').innerText.toLowerCase();
+                const ip = row.querySelector('.dev-ip').innerText.toLowerCase();
+                if (host.includes(query) || mac.includes(query) || ip.includes(query)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        function sortDevices(col) {
+            const tbody = document.getElementById('deviceTableBody');
+            const rows = Array.from(tbody.querySelectorAll('.device-row'));
+
+            if (deviceSortState.column === col) {
+                deviceSortState.ascending = !deviceSortState.ascending;
+            } else {
+                deviceSortState.column = col;
+                deviceSortState.ascending = true;
+            }
+
+            rows.sort((a, b) => {
+                let valA = a.querySelector(`.dev-${col === 'hostname' ? 'host' : col === 'mac' ? 'mac' : col === 'ip' ? 'ip' : 'time'}`).innerText.trim();
+                let valB = b.querySelector(`.dev-${col === 'hostname' ? 'host' : col === 'mac' ? 'mac' : col === 'ip' ? 'ip' : 'time'}`).innerText.trim();
+
+                return deviceSortState.ascending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            });
+
+            ['hostname', 'mac', 'ip', 'last_seen'].forEach(c => {
+                const icon = document.getElementById(`icon_${c}`);
+                if (icon) {
+                    if (deviceSortState.column === c) {
+                        icon.innerText = deviceSortState.ascending ? '▲' : '▼';
+                        icon.className = 'text-blue-600 font-bold';
+                    } else {
+                        icon.innerText = '⇅';
+                        icon.className = 'text-slate-400';
+                    }
+                }
+            });
+
+            tbody.innerHTML = '';
+            rows.forEach(row => tbody.appendChild(row));
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>內網 DHCP 封包精簡與健康診斷系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .sortable { cursor: pointer; user-select: none; }
+        .sortable:hover { background-color: #f1f5f9; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 p-6">
+    <div class="max-w-6xl mx-auto">
+        <!-- 標題區 -->
+        <header class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 mb-6 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900">DHCP 封包精簡與健康診斷工作站</h1>
+                <p class="text-sm text-slate-500 mt-1">支援本地路徑選取、白名單電腦名稱顯示與獨立 MAC 設備清冊產出</p>
+            </div>
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                本地即時運算
+            </span>
+        </header>
+
+        <!-- 設定表單 -->
+        <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 mb-6">
+            <h2 class="text-lg font-semibold mb-3 text-slate-800 border-b pb-2">分析來源設定</h2>
+            
+            <div class="flex gap-4 mb-5">
+                <label class="flex items-center gap-2 cursor-pointer bg-slate-50 border p-3 rounded-lg hover:border-blue-400 transition w-1/2">
+                    <input type="radio" name="source_type" value="pcap" checked onchange="toggleSourceType()" class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                    <div>
+                        <div class="font-semibold text-sm text-slate-800">來源一：Wireshark 封包檔 (.pcapng / .pcap)</div>
+                        <div class="text-xs text-slate-500">透過 tshark 抽取秒級精簡檔並分析</div>
+                    </div>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer bg-slate-50 border p-3 rounded-lg hover:border-blue-400 transition w-1/2">
+                    <input type="radio" name="source_type" value="csv" onchange="toggleSourceType()" class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                    <div>
+                        <div class="font-semibold text-sm text-slate-800">來源二：本地 Python 監控 CSV 檔 (.csv)</div>
+                        <div class="text-xs text-slate-500">直接分析 dhcp_events.csv 監控紀錄</div>
+                    </div>
+                </label>
+            </div>
+
+            <!-- PCAP 參數 -->
+            <div id="pcap_fields" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Wireshark 安裝路徑 (tshark 目錄)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="wireshark_dir" value="C:\Program Files\Wireshark" class="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                        <button type="button" onclick="browsePath('wireshark_dir', 'dir', '選擇 Wireshark 安裝資料夾')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2 rounded text-sm whitespace-nowrap transition">
+                            📂 瀏覽...
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">來源封包檔完整位址 (.pcapng)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="source_pcap" value="E:\share\DHCP02.pcapng" class="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                        <button type="button" onclick="browsePath('source_pcap', 'file_open', '選擇來源封包檔', 'pcap')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2 rounded text-sm whitespace-nowrap transition">
+                            📂 選擇檔案...
+                        </button>
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">輸出精簡封包存檔位址</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="output_pcap" value="E:\share\DHCP02_filtered.pcapng" class="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                        <button type="button" onclick="browsePath('output_pcap', 'file_save', '指定輸出精簡封包存檔路徑')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2 rounded text-sm whitespace-nowrap transition">
+                            💾 另存為...
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CSV 參數 -->
+            <div id="csv_fields" class="hidden grid grid-cols-1 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">本地監控 CSV 檔案位址</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="source_csv" value="E:\share\dhcp_events.csv" class="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                        <button type="button" onclick="browsePath('source_csv', 'file_open', '選擇 DHCP 監控 CSV 檔', 'csv')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2 rounded text-sm whitespace-nowrap transition">
+                            📂 選擇檔案...
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 共同參數 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 border-t pt-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">合法 DHCP 伺服器白名單 (逗號分隔)</label>
+                    <input type="text" id="authorized_servers" value="192.69.1.9" class="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">NAK 監控觀察名單 (支援 IP、MAC 或電腦名稱，留空監控全部)</label>
+                    <input type="text" id="target_naks" value="113NB-02, C117, C404" class="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div class="mt-6 flex items-center justify-end">
+                <button id="runBtn" onclick="executeAnalysis()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded shadow text-sm transition flex items-center">
+                    <span>開始執行分析</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 載入中動畫 -->
+        <div id="loading" class="hidden bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-6 flex items-center">
+            <svg class="animate-spin h-5 w-5 mr-3 text-blue-600" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            <span>正在串流分析資料與關聯電腦名稱中，請稍候...</span>
+        </div>
+
+        <!-- 結果展示區 -->
+        <div id="resultArea" class="hidden space-y-6">
+            <!-- 額外功能按鈕列 -->
+            <div class="flex justify-between items-center bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                <div class="text-sm text-blue-800">
+                    <span class="font-bold">✅ 分析完成！</span> 系統已同步建立內網所有連線電腦與 MAC 位址之完整對照清冊。
+                </div>
+                <a href="/device-mapping" target="_blank" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded shadow text-sm transition">
+                    <span>📋 開啟 MAC 對應電腦名稱對照表 (新分頁)</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                </a>
+            </div>
+
+            <!-- 摘要成效卡片 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                    <div id="res_orig_title" class="text-xs font-semibold text-slate-400">來源大小</div>
+                    <div id="res_orig_size" class="text-2xl font-bold text-slate-800 mt-1">-</div>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                    <div class="text-xs font-semibold text-slate-400">精簡後封包大小</div>
+                    <div id="res_filtered_size" class="text-2xl font-bold text-emerald-600 mt-1">-</div>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                    <div class="text-xs font-semibold text-slate-400">內網資安判定</div>
+                    <div id="res_security_status" class="text-lg font-bold mt-1">-</div>
+                </div>
+            </div>
+
+            <!-- 伺服器發放列表 (含伺服器電腦名稱) 與訊息統計 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
+                    <h3 class="font-bold text-slate-800 mb-3 text-sm border-b pb-2">DHCP 伺服器發放清單 (含主機名稱與偽冒判定)</h3>
+                    <div id="servers_list" class="space-y-2 text-sm"></div>
+                </div>
+                <div class="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
+                    <h3 class="font-bold text-slate-800 mb-3 text-sm border-b pb-2">訊息類型計數</h3>
+                    <div id="stats_list" class="grid grid-cols-2 gap-2 text-sm"></div>
+                </div>
+            </div>
+
+            <!-- NAK 事件追蹤 (支援時間、伺服器、MAC、電腦名稱點擊排序) -->
+            <div class="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between border-b pb-3 mb-3">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-sm">NAK 拒絕續約事件追蹤</h3>
+                        <p class="text-xs text-slate-400 mt-0.5">點擊標頭欄位（時間、伺服器、網卡 MAC、電腦名稱）可進行升冪 / 降冪排序</p>
+                    </div>
+                    <span id="nak_badge" class="text-xs px-2 py-0.5 rounded font-medium"></span>
+                </div>
+                <div class="overflow-x-auto max-h-96">
+                    <table class="w-full text-left text-sm" id="nakTable">
+                        <thead class="bg-slate-50 text-slate-600 border-b sticky top-0">
+                            <tr>
+                                <th class="p-2.5 sortable" onclick="sortNakTable('timestamp')">
+                                    <div class="flex items-center gap-1">時間 <span id="sort_icon_timestamp">⇅</span></div>
+                                </th>
+                                <th class="p-2.5 sortable" onclick="sortNakTable('server')">
+                                    <div class="flex items-center gap-1">回應伺服器 <span id="sort_icon_server">⇅</span></div>
+                                </th>
+                                <th class="p-2.5 sortable" onclick="sortNakTable('client_mac')">
+                                    <div class="flex items-center gap-1">用戶端 MAC <span id="sort_icon_client_mac">⇅</span></div>
+                                </th>
+                                <th class="p-2.5 sortable" onclick="sortNakTable('hostname')">
+                                    <div class="flex items-center gap-1">電腦名稱 (Host Name) <span id="sort_icon_hostname">⇅</span></div>
+                                </th>
+                                <th class="p-2.5">要求舊 IP</th>
+                                <th class="p-2.5">命中觀察清單</th>
+                            </tr>
+                        </thead>
+                        <tbody id="nak_table_body" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentNakEvents = [];
+        let sortState = {
+            column: 'timestamp',
+            ascending: false
+        };
+
+        function toggleSourceType() {
+            const isPcap = document.querySelector('input[name="source_type"]:checked').value === 'pcap';
+            document.getElementById('pcap_fields').classList.toggle('hidden', !isPcap);
+            document.getElementById('csv_fields').classList.toggle('hidden', isPcap);
+        }
+
+        async function browsePath(targetInputId, dialogType, title, filetypes = 'all') {
+            try {
+                const res = await fetch('/api/browse', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        dialog_type: dialogType,
+                        title: title,
+                        filetypes: filetypes
+                    })
+                });
+                const data = await res.json();
+                if (data.status === 'success' && data.path) {
+                    document.getElementById(targetInputId).value = data.path;
+                }
+            } catch (err) {
+                alert('開啟檔案瀏覽器時發生錯誤：' + err);
+            }
+        }
+
+        async function executeAnalysis() {
+            const runBtn = document.getElementById('runBtn');
+            const loading = document.getElementById('loading');
+            const resultArea = document.getElementById('resultArea');
+            const sourceType = document.querySelector('input[name="source_type"]:checked').value;
+
+            const payload = {
+                source_type: sourceType,
+                wireshark_dir: document.getElementById('wireshark_dir').value,
+                source_pcap: document.getElementById('source_pcap').value,
+                output_pcap: document.getElementById('output_pcap').value,
+                source_csv: document.getElementById('source_csv').value,
+                authorized_servers: document.getElementById('authorized_servers').value,
+                target_naks: document.getElementById('target_naks').value
+            };
+
+            runBtn.disabled = true;
+            runBtn.classList.add('opacity-50');
+            loading.classList.remove('hidden');
+            resultArea.classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const res = await response.json();
+
+                if (res.status === 'error') {
+                    alert('執行失敗：' + res.message);
+                    return;
+                }
+
+                renderResults(res);
+            } catch (err) {
+                alert('網路或伺服器發生異常：' + err);
+            } finally {
+                runBtn.disabled = false;
+                runBtn.classList.remove('opacity-50');
+                loading.classList.add('hidden');
+            }
+        }
+
+        function renderResults(res) {
+            document.getElementById('res_orig_title').innerText = res.file_info.source_title;
+            document.getElementById('res_orig_size').innerText = res.file_info.orig_size;
+            document.getElementById('res_filtered_size').innerText = res.file_info.filtered_size;
+
+            const secStatus = document.getElementById('res_security_status');
+            if (res.data.rogue_servers.length > 0) {
+                secStatus.innerHTML = `<span class="text-rose-600">偵測到偽冒 DHCP (${res.data.rogue_servers.join(', ')})</span>`;
+            } else {
+                secStatus.innerHTML = '<span class="text-emerald-600">正常 (無偽冒伺服器)</span>';
+            }
+
+            // 伺服器列表（包含電腦名稱）
+            const srvDiv = document.getElementById('servers_list');
+            srvDiv.innerHTML = '';
+            for (const [srvIp, info] of Object.entries(res.data.servers)) {
+                const isRogue = res.data.rogue_servers.includes(srvIp);
+                let badge = isRogue 
+                    ? '<span class="bg-rose-100 text-rose-800 text-xs px-2 py-0.5 rounded font-bold">非授權伺服器 (Rogue)</span>'
+                    : '<span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded">合法白名單</span>';
+                
+                let actionText = Object.entries(info.actions).map(([k, v]) => `${k}: ${v}`).join(' | ');
+
+                srvDiv.innerHTML += `
+                    <div class="p-3 bg-slate-50 border rounded flex justify-between items-center">
+                        <div>
+                            <div class="font-semibold text-slate-800 font-mono flex items-center gap-2">
+                                <span>${srvIp}</span>
+                                <span class="text-xs text-blue-600 font-normal">(${info.hostname})</span>
+                                ${badge}
+                            </div>
+                            <div class="text-xs text-slate-500 mt-1">${actionText}</div>
+                        </div>
+                    </div>`;
+            }
+
+            // 訊息統計
+            const statsDiv = document.getElementById('stats_list');
+            statsDiv.innerHTML = '';
+            for (const [mType, cnt] of Object.entries(res.data.stats)) {
+                statsDiv.innerHTML += `
+                    <div class="flex justify-between border-b py-1">
+                        <span class="text-slate-600">${mType}</span>
+                        <span class="font-bold text-slate-800">${cnt} 筆</span>
+                    </div>`;
+            }
+
+            currentNakEvents = res.data.nak_events || [];
+            sortState.column = 'timestamp';
+            sortState.ascending = false;
+            renderNakTable();
+
+            document.getElementById('resultArea').classList.remove('hidden');
+        }
+
+        function sortNakTable(columnKey) {
+            if (sortState.column === columnKey) {
+                sortState.ascending = !sortState.ascending;
+            } else {
+                sortState.column = columnKey;
+                sortState.ascending = true;
+            }
+
+            currentNakEvents.sort((a, b) => {
+                let valA = a[columnKey] || '';
+                let valB = b[columnKey] || '';
+
+                if (columnKey === 'server') {
+                    return compareIp(valA, valB, sortState.ascending);
+                } else {
+                    return sortState.ascending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+            });
+
+            renderNakTable();
+        }
+
+        function compareIp(ipA, ipB, isAsc) {
+            const numA = ipA.split('.').map(x => parseInt(x, 10) || 0);
+            const numB = ipB.split('.').map(x => parseInt(x, 10) || 0);
+            for (let i = 0; i < 4; i++) {
+                if (numA[i] !== numB[i]) {
+                    return isAsc ? numA[i] - numB[i] : numB[i] - numA[i];
+                }
+            }
+            return 0;
+        }
+
+        function renderNakTable() {
+            const nakBody = document.getElementById('nak_table_body');
+            const nakBadge = document.getElementById('nak_badge');
+
+            ['timestamp', 'server', 'client_mac', 'hostname'].forEach(col => {
+                const icon = document.getElementById(`sort_icon_${col}`);
+                if (icon) {
+                    if (sortState.column === col) {
+                        icon.innerText = sortState.ascending ? '▲' : '▼';
+                        icon.className = 'text-blue-600 font-bold';
+                    } else {
+                        icon.innerText = '⇅';
+                        icon.className = 'text-slate-400';
+                    }
+                }
+            });
+
+            nakBody.innerHTML = '';
+
+            if (currentNakEvents.length === 0) {
+                nakBadge.className = 'text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700';
+                nakBadge.innerText = '0 件異常';
+                nakBody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">本次記錄完全無 NAK 拒絕續約事件</td></tr>';
+                return;
+            }
+
+            nakBadge.className = 'text-xs px-2 py-0.5 rounded bg-rose-100 text-rose-700 font-bold';
+            nakBadge.innerText = `${currentNakEvents.length} 件拒絕事件`;
+
+            currentNakEvents.forEach(item => {
+                const matchBadge = item.matched_watch 
+                    ? '<span class="bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded text-xs font-bold">命中</span>' 
+                    : '<span class="text-slate-400 text-xs">否</span>';
+
+                nakBody.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-2.5 font-mono text-xs text-slate-600">${item.timestamp || '-'}</td>
+                        <td class="p-2.5 font-mono text-xs text-slate-800 font-medium">${item.server}</td>
+                        <td class="p-2.5 font-mono text-xs text-slate-800">${item.client_mac}</td>
+                        <td class="p-2.5 font-bold text-xs text-blue-700">${item.hostname || '未知'}</td>
+                        <td class="p-2.5 font-mono text-xs text-slate-600">${item.requested_ip || '-'}</td>
+                        <td class="p-2.5">${matchBadge}</td>
+                    </tr>`;
+            });
+        }
+    </script>
+</body>
+</html>

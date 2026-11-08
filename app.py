@@ -7,15 +7,32 @@ import datetime
 import webbrowser
 import threading
 from collections import Counter, defaultdict
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from api_v2 import create_query_app
+from database.connection import connect_database, connect_readonly_database
+from database.migrations import migrate
+from database.repositories import latest_completed_job
 
 app = FastAPI(title="DHCP Packet & Log Analyzer")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+# V2 background Job/Query API. The mounted sub-application exposes only
+# database-backed job and event endpoints; it cannot control monitor tools.
+V2_DATABASE_PATH = os.path.join(BASE_DIR, "data", "dhcp_analyzer.db")
+app.mount("/api/v2", create_query_app(V2_DATABASE_PATH, route_prefix=""))
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse(os.path.join(STATIC_DIR, "favicon.svg"), media_type="image/svg+xml")
 
 # 全域快取最近一次分析的裝置映射資料與分析時間
 LATEST_ANALYSIS_DATA = {
@@ -348,18 +365,35 @@ async def index(request: Request):
 # 獨立產出的 MAC 對應電腦名稱列表新頁面
 @app.get("/device-mapping", response_class=HTMLResponse)
 async def device_mapping_page(request: Request):
+    connection = connect_readonly_database(V2_DATABASE_PATH)
+    try:
+        latest = latest_completed_job(connection)
+        latest_job_id = latest["job_id"] if latest else ""
+    finally:
+        connection.close()
     return templates.TemplateResponse(
         request=request, 
         name="device_mapping.html",
         context={
-            "analysis_time": LATEST_ANALYSIS_DATA["analysis_time"] or "尚未進行分析",
-            "source_file": LATEST_ANALYSIS_DATA["source_file"] or "無",
-            "device_mappings": LATEST_ANALYSIS_DATA["device_mappings"]
+            "analysis_time": latest["completed_at"] if latest else "尚未進行分析",
+            "source_file": latest["source_name"] if latest else "無",
+            "latest_job_id": latest_job_id,
+            "device_mappings": []
         }
     )
 
-@app.post("/api/run")
+@app.post("/api/run", include_in_schema=False)
+async def deprecated_run_analysis():
+    raise HTTPException(status_code=410, detail="Deprecated. Use POST /api/v2/jobs and query the Job API.")
+
+
+@app.post("/api/legacy/run", include_in_schema=False)
 async def run_analysis(req: AnalyzeRequest):
+    raise HTTPException(status_code=410, detail="Legacy endpoint disabled. Use POST /api/v2/jobs and query the Job API.")
+
+    # Kept below for source-level migration reference only.  It is intentionally
+    # unreachable: the web application must not invoke tshark or other monitor
+    # tools on behalf of a browser request.
     auth_list = [x.strip() for x in req.authorized_servers.split(",") if x.strip()]
     nak_watch = [x.strip() for x in req.target_naks.split(",") if x.strip()]
     current_time_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

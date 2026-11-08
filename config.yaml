@@ -1,0 +1,80 @@
+# DHCP Analyzer V2.2 settings (spec chapter 12 / 19.7).
+# Relative paths are resolved against the project directory.
+# Changes take effect on the next process start.
+
+database:
+  path: data/dhcp_analyzer.db
+  journal_mode: WAL
+  synchronous: NORMAL
+  busy_timeout: 10000
+
+monitor:
+  interface: ""
+  bpf_filter: "udp and (port 67 or port 68)"
+  heartbeat_interval: 5
+  heartbeat_timeout: 15
+  console_output: true
+
+writer:
+  batch_size: 1000
+  flush_interval: 5
+  retry_count: 5
+  retry_backoff_initial: 0.1
+  retry_backoff_max: 2.0
+  aging_seconds: 30
+
+upload:
+  root: upload
+  max_file_size_mb: 2048
+  chunk_size_kb: 1024
+  allowed_extensions:
+    - pcap
+    - pcapng
+    - csv
+  upload_timeout_seconds: 3600
+
+retention:
+  event_days: 30
+  cleanup_batch_size: 5000
+  cleanup_hour: 3
+
+anomaly:
+  flooding:
+    enabled: true
+    window_seconds: 10
+    single_mac_threshold: 20
+    global_mac_threshold: 100
+    global_window_seconds: 1
+  ip_conflict:
+    enabled: true
+    window_seconds: 60
+  abnormal_lease:
+    enabled: true
+    minimum_seconds: 300
+    maximum_seconds: 2592000
+  rogue_dhcp:
+    enabled: true
+    authorized_servers: []
+  max_tracked_macs: 10000
+  max_tracked_ips: 20000
+  state_ttl_seconds: 300
+  alert_cooldown_seconds: 60
+  max_alerts_per_minute: 100
+
+silent_filter:
+  enabled: true
+  persist_interval_seconds: 5
+
+runtime:
+  max_workers: 1
+  max_queued_jobs: 10
+  max_in_memory_events: 5000
+  max_pending_write_batches: 20
+  max_events_per_response: 500
+  max_json_response_mb: 5
+  graceful_shutdown_timeout_seconds: 60
+
+priority:
+  live_monitor: HIGH
+  offline_analysis: NORMAL
+  maintenance: LOW
